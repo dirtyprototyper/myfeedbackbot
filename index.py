@@ -1,13 +1,13 @@
 '''
-start: feedback
-question : normal asking question
-manual: owner replying
-cancel: quitting and ending the conversation
+start: feedback (users)
+question : normal asking question (users)
+manual: owner replying. Need chatid & message.
+cancel: quitting and ending the conversation (all of the above. it ends the conversation regardless of state)
 
 ToDo:
-1. To finish up sql for workbench.
-2. Move everything to Firebase
-3. Test if it works on S3 with Firebase
+1. To finish up sql for workbench. (refractored inserted. Will need to do a "get")
+2. Move everything to Firebase (Basic get and insert is there. to test it out. To upload stuff to s3)
+3. Test if it works on S3 with Firebase (to test if firebase and angular works even when hosting on s3)
 4. Refractoring (config file, index.py)
 5. link to angular
 '''
@@ -27,7 +27,7 @@ from telegram.ext import (
     CallbackContext,
     conversationhandler,
 )
-from config import  insertfeedback, insertquestion
+from config import  getallfeedback, getquestionbytele, insertfeedback, insertquestion
 # , openconnection
 
 from dotenv import load_dotenv
@@ -55,6 +55,8 @@ ANSWER = 6
 REPLY = 7
 
 def start(update: Update, context: CallbackContext) -> int:
+
+    
     """Starts the conversation."""
     reply_keyboard = [['Day1', 'Day2', "Both"]]
 
@@ -143,7 +145,7 @@ def question(update: Update, context: CallbackContext) -> int:
         update.message.reply_text("There's is an error.. Try again later")
 
     else:
-        print("else")
+        # print("else")
         update.message.reply_text('Thank you! We hope to see you in our events in the future :).')
         
 
