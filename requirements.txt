@@ -1,0 +1,6 @@
+firebase_admin==5.0.3
+python_telegram_bot==13.7
+contextvars==2.4
+mysql_connector_repackaged==0.3.1
+python-dotenv==0.19.1
+telegram==0.0.1

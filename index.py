@@ -4,8 +4,20 @@ question : normal asking question (users)
 manual: owner replying. Need chatid & message.
 cancel: quitting and ending the conversation (all of the above. it ends the conversation regardless of state)
 
+What's avaiilable on the bot for firebase:
+Available:
+inserting feedback. (feedback)
+inserting question. (question). To implement the code feature and S3.
+Answering specific question to the user who asked. (manual)
+
+
+Not Available(on telegram):
+Not returning all feedback.
+Not returning all question.
+
+
 ToDo:
-1. To finish up sql for workbench. (refractored inserted. Will need to do a "get")
+1. To finish up sql for workbench. (refractored inserted. Will need to do a "get") [done]
 2. Move everything to Firebase (Basic get and insert is there. to test it out. To upload stuff to s3)
 3. Test if it works on S3 with Firebase (to test if firebase and angular works even when hosting on s3)
 4. Refractoring (config file, index.py)
@@ -16,6 +28,7 @@ from contextvars import Token
 import logging
 from warnings import filters
 from mysql.connector import Error
+import uuid
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, constants
 from telegram.ext import (
@@ -27,14 +40,18 @@ from telegram.ext import (
     CallbackContext,
     conversationhandler,
 )
-from config import  getallfeedback, getquestionbytele, insertfeedback, insertquestion
-# , openconnection
+#for mysql workbench
+# from config import  getallfeedback, getquestionbytele, insertfeedback, insertquestion
+
+from firebase import insertfeedback, getallfeedback, insertquestion, getquestionbytele, getallquestion, uploadfile
 
 from dotenv import load_dotenv
+
+
+# from s3ops import upload_file
 load_dotenv()
 import os
 bottoken = os.environ.get('TOKEN')
-
 
 # Enable logging
 logging.basicConfig(
@@ -44,15 +61,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #feedback
-ATTENDANCE, TAKEAWAY, IMPROVEMENT, QUESTION = range(4)
-
+ATTENDANCE, TAKEAWAY, IMPROVEMENT, QUESTION = range(0,4)
 #question
-QUERY = 5
-PHOTO = 8
-CODE = 9
+QUERY,PHOTO, CODE = range(4,7)
+ANSWER,REPLY= range(7,9)
+#manual reply
 
-ANSWER = 6
-REPLY = 7
 
 def start(update: Update, context: CallbackContext) -> int:
 
@@ -196,7 +210,7 @@ def skip(update: Update, context: CallbackContext) -> int:
     # user = update.message.from_user
     # logger.info("User %s did not send a photo.", user.first_name)
     update.message.reply_text(
-        'Okie :). Wait for hooman now'
+        'No Code received.\n Okie :). Wait for hooman now'
     )
     # context.user_data["code"] = update.message.text
 
@@ -204,10 +218,31 @@ def skip(update: Update, context: CallbackContext) -> int:
     insertquestion(context.user_data)
     return ConversationHandler.END
 
+import threading
 
 def acknowledge(update: Update, context: CallbackContext) -> int:
-    print("acknoledges")
-    update.message.reply_text("Okie, wait for hooman now")
+    print("acknowledges")
+    
+    #writing the file
+    filename = uuid.uuid1()
+    context.user_data['filename'] = str(filename)
+
+   
+    # f = open( "codes/" + str(filename), "a")
+    # f.write(update.message.text)
+    # f.close
+   
+
+    
+    # uploadfile("codes/" + str(filename)+ ".txt" )
+    uploadfile(filename, update.message.text )
+
+
+
+    # insertquestion(context.user_data)
+
+
+    update.message.reply_text("Code received.\nOkie, wait for hooman now")
 
 
 
@@ -315,60 +350,3 @@ def main() -> None:
 if __name__ == '__main__':
     main()
 
-
-
-# def feedback1(update: Update, context: CallbackContext) -> int:
-#     """collect first feedback"""
-#     user = update.message.from_user
-#     logger.info(user.first_name, "attended on" , update.message.text)
-#     update.message.reply_text(
-#         'I see! Please send me a photo of yourself, '
-#         'so I know what you look like, or send /skip if you don\'t want to.',
-#         reply_markup=ReplyKeyboardRemove(),
-#     )
-
-#     return PHOTO
-
-
-
-
-# def location(update: Update, context: CallbackContext) -> int:
-#     """Stores the location and asks for some info about the user."""
-#     user = update.message.from_user
-#     user_location = update.message.location
-#     logger.info(
-#         "Location of %s: %f / %f", user.first_name, user_location.latitude, user_location.longitude
-#     )
-#     update.message.reply_text(
-#         'Maybe I can visit you sometime! At last, tell me something about yourself.'
-#     )
-
-#     return BIO
-
-#not working yet
-# def photo(update: Update, context: CallbackContext) -> int:
-    
-#     """Stores the photo and asks for a location."""
-#     update.message.reply_text(
-#         'Add a photo. or /skip  (not working currently)\n'
-#         'upload Away!',
-#     )    
-
-#     user = update.message.from_user
-#     photo_file = update.message.photo[-1].get_file()
-#     photo_file.download('user_photo.jpg')
-#     logger.info("Photo of %s: %s", user.first_name, 'user_photo.jpg')
-
-
-#     return QUERY
-
-
-# def skip_location(update: Update, context: CallbackContext) -> int:
-#     """Skips the location and asks for info about the user."""
-#     user = update.message.from_user
-#     logger.info("User %s did not send a location.", user.first_name)
-#     update.message.reply_text(
-#         'You seem a bit paranoid! At last, tell me something about yourself.'
-#     )
-
-#     return BIO

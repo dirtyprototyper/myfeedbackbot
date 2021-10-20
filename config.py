@@ -11,8 +11,8 @@ def openconnection():
     try:
         dbconfig = {
             "user" :'bot',
-            "password" :"your password",
-            "database": "your db",
+            "password" :"13Eddie07",
+            "database": "codingfeedback",
             
         }
 
