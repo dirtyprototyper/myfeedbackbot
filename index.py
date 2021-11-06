@@ -1,31 +1,33 @@
 '''
-start: feedback (users)
-question : normal asking question (users)
+start: feedback (For users)
+question : normal asking question (For users)
 manual: owner replying. Need chatid & message.
 cancel: quitting and ending the conversation (all of the above. it ends the conversation regardless of state)
 
 What's avaiilable on the bot for firebase:
 Available:
 inserting feedback. (feedback)
-inserting question. (question). To implement the code feature and S3.
+inserting question. (question). 
 Answering specific question to the user who asked. (manual)
 
 
-Not Available(on telegram):
-Not returning all feedback.
-Not returning all question.
+Not Available(But Angular Website. To DO..):
+Returning all question. (priority)
+Returning all feedback. 
 
 
 ToDo:
 1. To finish up sql for workbench. (refractored inserted. Will need to do a "get") [done]
-2. Move everything to Firebase (Basic get and insert is there. to test it out. To upload stuff to s3)
-3. Test if it works on S3 with Firebase (to test if firebase and angular works even when hosting on s3)
-4. Refractoring (config file, index.py)
-5. link to angular
+2. Move everything to Firebase (Basic get and insert is there. to test it out. To upload stuff to firebase storage.) [done]
+3. Test if it works on Firebase (to test if firebase and angular works even when hosting on s3) [done]
+4. Refractoring (config file, index.py) [not yet]
+5. link to angular [in progress.] [to get the file link as well]
+
 '''
 
 from contextvars import Token
 import logging
+from typing import Awaitable
 from warnings import filters
 from mysql.connector import Error
 import uuid
@@ -43,7 +45,7 @@ from telegram.ext import (
 #for mysql workbench
 # from config import  getallfeedback, getquestionbytele, insertfeedback, insertquestion
 
-from firebase import insertfeedback, getallfeedback, insertquestion, getquestionbytele, getallquestion, uploadfile
+from firebase import insertfeedback, getallfeedback, insertquestion, getquestionbytele, getallquestion, updateanswer, updateanswerreply, uploadfile
 
 from dotenv import load_dotenv
 
@@ -64,8 +66,9 @@ logger = logging.getLogger(__name__)
 ATTENDANCE, TAKEAWAY, IMPROVEMENT, QUESTION = range(0,4)
 #question
 QUERY,PHOTO, CODE = range(4,7)
-ANSWER,REPLY= range(7,9)
+
 #manual reply
+ANSWER,QNKEY,REPLY= range(7,10)
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -180,7 +183,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
 def query(update: Update, context: CallbackContext) -> int:
 
     update.message.reply_text(
-        'Hi! My name is feedback_to_bot.\nPlease kindly feedback about the session so that we can improve :). '
+        'Hi! My name is feedback_to_bot.\nPlease ask any question that you would like:)'
         'Send /cancel to stop talking to me.\n\n'
         'Ask Away!',
     )    
@@ -218,35 +221,23 @@ def skip(update: Update, context: CallbackContext) -> int:
     insertquestion(context.user_data)
     return ConversationHandler.END
 
-import threading
 
 def acknowledge(update: Update, context: CallbackContext) -> int:
     print("acknowledges")
     
+    context.user_data['code'] = update.message.text
+    
     #writing the file
     filename = uuid.uuid1()
     context.user_data['filename'] = str(filename)
-
-   
-    # f = open( "codes/" + str(filename), "a")
-    # f.write(update.message.text)
-    # f.close
-   
-
     
-    # uploadfile("codes/" + str(filename)+ ".txt" )
-    uploadfile(filename, update.message.text )
+    url = uploadfile(filename, update.message.text )
+    context.user_data['url'] = url
 
-
-
-    # insertquestion(context.user_data)
-
+    insertquestion(context.user_data)
 
     update.message.reply_text("Code received.\nOkie, wait for hooman now")
 
-
-
-    #to insert data into table for quesiton
 
     return ConversationHandler.END
 #end of asking question
@@ -256,10 +247,19 @@ def acknowledge(update: Update, context: CallbackContext) -> int:
 #manually answer questions.
 #to do: add db features
 def manual(update: Update, context: CallbackContext) -> int:
-    update.message.reply_text("Okie, give me the id")
+    update.message.reply_text("Okie, give me the qnkey. Hint: '-xxxx' in your firebase")
     print("manual")    
-    return ANSWER
+    return QNKEY
 
+def questionkey(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text("Chat ID?")
+    
+    #this is the chatid
+    # print(update.message.text)
+    context.user_data["qnkey"] = update.message.text
+
+    return ANSWER
+    
 def answer(update: Update, context: CallbackContext) -> int:
     update.message.reply_text("the answer?")
     
@@ -273,6 +273,14 @@ def reply(update: Update, context: CallbackContext) -> int:
     #this is the anwer
     # print(update.message.text)
 
+    context.user_data['answer'] = update.message.text
+
+    print('context.user_data stuffs')
+    print(context.user_data)
+
+    updateanswer(context.user_data)
+
+
     #chat_id to be dynamic
     context.bot.send_message(
         chat_id= context.user_data["chat_id"],
@@ -280,6 +288,9 @@ def reply(update: Update, context: CallbackContext) -> int:
     )
     return ConversationHandler.END
 #end of manual
+
+# def sync(update:Update, context:CallbackContext):
+#         print("ok")
 
 
 def main() -> None:
@@ -327,7 +338,8 @@ def main() -> None:
     manual_handler = ConversationHandler(
         entry_points=[CommandHandler('manual',manual)],
         states={
-            ANSWER:[MessageHandler(Filters.text & ~Filters.command, answer)],
+            QNKEY:[MessageHandler(Filters.text & ~Filters.command, questionkey)],
+            ANSWER: [MessageHandler(Filters.text & ~Filters.command, answer)],
             REPLY: [MessageHandler(Filters.text & ~Filters.command, reply)],
         },
         
@@ -336,17 +348,55 @@ def main() -> None:
     # manual.add_handler(manual_handler)
     dispatcher.add_handler(manual_handler)
 
+
+
+    # dispatcher.add_handler(conversationhandler("sync", sync))
     # Start the Bot
     updater.start_polling()
 
+    #try to poll other stuff in the mean time.
+    s = sched.scheduler(time.time, time.sleep)
 
+    def do_something(sc): 
+        print("Doing stuff...")
+        # do your stuff
+        print(time.asctime())
+        s.enter(60, 1, do_something, (sc,))
+        
+        #pull data from firebase
+        data = getallquestion()
+        
+        for key,value in data.items():
+            # print(key)
+
+            # print(('replied' in value) == True)
+            # print(('replied' in value) === True)
+
+            #if replied is true and value is yes. ok
+            #if replied is true and value is no, means we need to send a message
+            if ( ('answer' in value) == True  ):
+                
+                if value['replied'] == 'no' :
+                    #the telegram id
+                    print(value)
+
+                    print(value['id'])       
+                    print(value['answer'])
+                    
+                    updater.bot.send_message(value['id'],  "For the question '" +value['question'] +"' the answer is" + value['answer'])
+                    updateanswerreply(key)
+                    # CallbackContext.bot.send_message(chat_id = value["id"] , text =  value['answer'] )
+    s.enter(300, 1, do_something, (s,))
+    s.run()
 
     # Run the bot until you press Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT. This should be used most of the time, since
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
 
+import sched, time
 
 if __name__ == '__main__':
+    print(time.asctime())
     main()
 

@@ -89,23 +89,64 @@ def getallfeedback():
 ############################
 #question
 def insertquestion(qn):
-    print(qn)
+    # print("qn")
+    # print(qn)
+
+
     ref = db.reference("/question/")
-    ref.push({
-        'username': qn['username'],
-        'id': qn['id'],
-        'question': qn['question'],
-        "code": qn["filename"]
+    if ('url' in qn):
+        ref.push({
+            'username': qn['username'],
+            'id': qn['id'], 
+            'question': qn['question'],
+            "filename": qn["filename"],
+            "code": qn["code"],
+            "url": qn['url'],
+            "replied": "no"
+
+        })
+    else:
+        ref.push({
+            'username': qn['username'],
+            'id': qn['id'], 
+            'question': qn['question'],
+            "replied": "no"
+
+            # "code": qn["filename"],
+            # "url": qn['url']
+
+        })
+
+#inserting answer to the question
+def updateanswer(ans):
+    print("updateanswer")
+    ref = db.reference("/question/")
+    ref.child(ans['qnkey']).update({
+        'answer': ans['answer'],
+        "replied": "yes"
+    })
+
+#from angular. updating replied with the key supplied
+def updateanswerreply(ans):
+    print("updateanswer")
+    print(ans)
+    ref = db.reference("/question/")
+    ref.child(ans).update({
+        "replied": "yes"
     })
 
 
 
+id = "-MmJrMArEwgV5orHoKYk"
+answer = "another answer"
+# updateanswer(id, answer)
 
 #get all question
 def getallquestion():
     ref = db.reference("/question/")
     data = ref.get()
-    print(data)
+    # print(data)
+    return data
 
 
 #get a user question
@@ -121,7 +162,11 @@ def getquestionbytele(username):
 
 
 
+
+
+
 ############## FILE STORAGE ##############################
+##https://googleapis.dev/python/storage/latest/blobs.html
 import os
 
 
@@ -130,11 +175,12 @@ bucket = storage.bucket()
 
 #https://stackoverflow.com/questions/52883534/firebase-storage-upload-file-python
 def uploadfile(filename, filecontent):
-    print("uploadfile")
+    print("def uploadfile")
 
     #setting file name
     filename = str(filename) + ".txt"
 
+    url = ""
     #writing the file
     f = open("codes/" + filename, "a")
     f.write(filecontent)
@@ -156,10 +202,14 @@ def uploadfile(filename, filecontent):
     with open(adirectory, "rb") as adirectory:
         blob.upload_from_file(adirectory)
         blob.make_public()
-        print(blob.public_url)
+        # print(blob.public_url)
+        url = str(blob.public_url)
 
+    return url
+
+    
     #test with erturn
-    allfile(filename)
+    # allfile(filename)
 
 
 import datetime
